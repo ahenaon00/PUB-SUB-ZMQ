@@ -1,20 +1,24 @@
 import zmq
-import sys
 import time
 
-
 context = zmq.Context()
+
 subSocket = context.socket(zmq.SUB)
-subSocket.connect("tcp://localhost:5559")
-subSocket.setsockopt_string(zmq.SUBSCRIBE, "multiFirst")
+subSocket.connect("tcp://localhost:7777")
+subSocket.setsockopt_string(zmq.SUBSCRIBE, "multi")
 
 pubSocket = context.socket(zmq.PUB)
-pubSocket.bind("tcp://localhost:5560")
+pubSocket.connect("tcp://localhost:7776")
 
 while True:
-    operandos = subSocket.recv_multipart()[1].decode().split(",")
-    print(f"Recibidos numeros a multiplicar : {operandos}")
-    topic = "multiSecond"
-    multi = str(int(operandos[0]) * int(operandos[1]))
-    pubSocket.send_multipart([topic.encode(), multi.encode()])
-    time.sleep(1)
+    try:
+        msg = subSocket.recv_multipart(flags=zmq.NOBLOCK)
+        if msg[0].decode() == "multi":
+            suma, num3 = msg[1].decode().split(',')
+            print(f"Recibidos para multiplicación: {suma}, {num3}")
+            resultado = str(int(suma) * int(num3))
+            pubSocket.send_multipart([b"resultFinal", resultado.encode()])
+    except zmq.Again:
+        pass
+    
+    time.sleep(0.1)
