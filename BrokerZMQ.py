@@ -1,34 +1,36 @@
-import sys
 import zmq
 
 context = zmq.Context()
+
+# Sockets principales
 xsub = context.socket(zmq.XSUB)
 xsub.bind("tcp://*:7776")
 
 xpub = context.socket(zmq.XPUB)
 xpub.bind("tcp://*:7777")
 
+# Socket para monitoreo por el broker de respaldo
+monitor = context.socket(zmq.REP)
+monitor.bind("tcp://*:7778")
 
 poller = zmq.Poller()
 poller.register(xsub, zmq.POLLIN)
-poller.register(xpub, zmq.POLLIN) 
-
+poller.register(xpub, zmq.POLLIN)
+poller.register(monitor, zmq.POLLIN)
 
 while True:
-    msg = xsub.recv_multipart()
-    print(msg)
-    if msg[0].decode() == "operandos":
-        print(f"llegaron los operandos")
-        print("Mandando numeros a server Central")
+    socks = dict(poller.poll())
+    
+    if xsub in socks:
+        msg = xsub.recv_multipart()
+        print(f"Broker recibió de XSUB: {msg}")
         xpub.send_multipart(msg)
-    elif msg[0].decode() == "suma":
-        print(f"Operandos listos para ser sumados")
-        print(f"Enviando a Servidor Central...")
-        xpub.send_multipart([msg[0].decode(), msg[1].decode()])
-    elif msg[0].decode() == "sumaResult":
-        print(f"Operandos finales listos para multiplicacion")
-        print(f"Enviando operandos a Servidor Central...")
-        topic = "multi"
-        xpub.send_multipart([topic.encode(), msg[1].decode()])
-socket.close()
-context.term()
+
+    if xpub in socks:
+        msg = xpub.recv()
+        print(f"Broker recibió de XPUB (suscripciones): {msg}")
+        xsub.send(msg)
+        
+    if monitor in socks:
+        msg = monitor.recv()
+        monitor.send(b"PONG")  # Responder al heartbeat
