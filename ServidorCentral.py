@@ -5,13 +5,13 @@ context = zmq.Context()
 
 # Socket hacia el broker (para suma y multiplicación)
 subSocket = context.socket(zmq.SUB)
-subSocket.connect("tcp://10.43.96.14:7777")  # IP del broker
+subSocket.connect("tcp://localhost:7777")  # IP del broker
 subSocket.setsockopt_string(zmq.SUBSCRIBE, "sumaResult")
 subSocket.setsockopt_string(zmq.SUBSCRIBE, "multi")
 subSocket.setsockopt_string(zmq.SUBSCRIBE, "resultFinal")
 
 pubSocket = context.socket(zmq.PUB)
-pubSocket.connect("tcp://10.43.96.14:7776")
+pubSocket.connect("tcp://localhost:7776")
 
 # Socket para comunicarse con el cliente directamente
 pubCliente = context.socket(zmq.PUB)
