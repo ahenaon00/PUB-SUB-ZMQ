@@ -12,6 +12,7 @@ try:
     xpub.bind("tcp://*:7777")
     
     print("Broker de respaldo actuando como primario")
+    is_primary = True
 except zmq.ZMQError:
     # Si no puede bindear, asumir que hay un broker primario y esperar
     print("Broker primario detectado, actuando como respaldo")
@@ -29,33 +30,39 @@ except zmq.ZMQError:
     monitor = context.socket(zmq.REQ)
     monitor.connect("tcp://localhost:7778")
     monitor.setsockopt(zmq.RCVTIMEO, 2000)  # Timeout de 2 segundos
+    
+    is_primary = False
+    last_pong = time.time()
 
 poller = zmq.Poller()
 poller.register(xsub, zmq.POLLIN)
 
 # Si estamos en modo respaldo, monitorear al primario
-if 'monitor' in locals():
+if not is_primary:
     poller.register(monitor, zmq.POLLIN)
 
-last_activity = time.time()
 primary_timeout = 3  # segundos sin respuesta para considerar caído
 
 while True:
     try:
         socks = dict(poller.poll(1000))  # Timeout de 1 segundo
         
-        # Si estamos en modo respaldo y el primario no responde
-        if 'monitor' in locals():
-            if time.time() - last_activity > primary_timeout:
-                try:
-                    monitor.send(b"PING")
-                    msg = monitor.recv()
-                    last_activity = time.time()
-                except zmq.Again:
-                    print("Broker primario no responde, tomando control...")
+        # Si estamos en modo respaldo y es tiempo de verificar el primario
+        if not is_primary and monitor in socks:
+            try:
+                monitor.send(b"PING")
+                msg = monitor.recv()
+                if msg == b"PONG":
+                    print("Received PONG from primary broker")
+                    last_pong = time.time()
+            except zmq.Again:
+                print("Primary broker did not respond to PING")
+                if time.time() - last_pong > primary_timeout:
+                    print("Primary broker timeout, taking over...")
                     # Cambiar a modo primario
                     xsub.close()
                     xpub.close()
+                    monitor.close()
                     
                     xsub = context.socket(zmq.XSUB)
                     xsub.bind("tcp://*:7776")
@@ -65,14 +72,14 @@ while True:
                     
                     poller = zmq.Poller()
                     poller.register(xsub, zmq.POLLIN)
-                    print("Ahora actuando como broker primario")
-                    del monitor
+                    print("Now acting as primary broker")
+                    is_primary = True
         
         if xsub in socks:
             msg = xsub.recv_multipart()
-            print(f"Broker recibió mensaje: {msg}")
+            print(f"Broker received message: {msg}")
             xpub.send_multipart(msg)
             
     except zmq.ZMQError as e:
-        print(f"Error en broker: {e}")
+        print(f"Error in broker: {e}")
         time.sleep(1)

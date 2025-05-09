@@ -4,11 +4,11 @@ import time
 context = zmq.Context()
 
 subSocket = context.socket(zmq.SUB)
-subSocket.connect("tcp://localhost:7777")
+subSocket.connect("tcp://10.43.96.14:7777")
 subSocket.setsockopt_string(zmq.SUBSCRIBE, "suma")
 
 pubSocket = context.socket(zmq.PUB)
-pubSocket.connect("tcp://localhost:7776")
+pubSocket.connect("tcp://10.43.96.14:7776")
 
 while True:
     try:
